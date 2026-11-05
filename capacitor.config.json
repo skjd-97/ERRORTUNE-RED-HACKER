@@ -1,0 +1,8 @@
+{
+  "appId": "com.errortune.redhacker",
+  "appName": "ERRORTUNE RED HACKER",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

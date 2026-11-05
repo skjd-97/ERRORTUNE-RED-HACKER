@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ERRORTUNE RED HACKER</string>
+    <string name="title_activity_main">ERRORTUNE RED HACKER</string>
+    <string name="package_name">com.errortune.redhacker</string>
+    <string name="custom_url_scheme">com.errortune.redhacker</string>
+</resources>
