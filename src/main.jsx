@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { createRoot } from 'react-dom/client';
 import {
   Play, Pause, SkipForward, SkipBack, Search, ArrowDownUp, Music, Video,
@@ -11,6 +12,7 @@ import './style.css';
 const DB_NAME = 'errortune-media-library';
 const DB_VERSION = 1;
 const STORE = 'media';
+const NativeMediaLibrary = registerPlugin('MediaLibrary');
 const ACCEPTED = /\.(mp3|wav|ogg|flac|m4a|aac|opus|mp4|webm|mkv|avi|mov|wmv|m4v)$/i;
 
 function openDatabase() {
@@ -103,10 +105,86 @@ function App() {
   const folderRef = useRef(null);
   const objectUrlRef = useRef(null);
 
-  useEffect(() => {
-    readAll().then(rows => setLibrary(rows.map(({ blob, ...meta }) => meta)))
-      .catch(() => setStorageError('Browser storage could not be opened. Try a current browser with site storage enabled.'));
+  const scanDeviceMedia = useCallback(async (showMessage = false) => {
+    if (!Capacitor.isNativePlatform()) {
+      if (showMessage) setToast('Device scanning is available in the Android app.');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const access = await NativeMediaLibrary.requestAccess();
+
+      if (!access?.granted) {
+        if (showMessage) setToast('Allow Audio and Video access to scan your media.');
+        return;
+      }
+
+      const response = await NativeMediaLibrary.listMedia();
+      const rows = response?.items || [];
+      const nextItems = [];
+
+      for (const item of rows) {
+        const filename = item.name || 'Unknown media';
+        const record = {
+          id: 'device-' + item.id,
+          sourceUri: item.uri,
+          name: filename.replace(/\\.[^.]+$/, ''),
+          filename,
+          path: (item.path || '') + filename,
+          kind: item.kind,
+          size: Number(item.size || 0),
+          type: item.mimeType || '',
+          duration: Number(item.duration || 0) / 1000,
+          addedAt: Number(item.dateAdded || 0) * 1000
+        };
+
+        await saveRecord(record);
+        const { blob, ...meta } = record;
+        nextItems.push(meta);
+      }
+
+      setLibrary(prev => [
+        ...prev.filter(item => !String(item.id).startsWith('device-')),
+        ...nextItems
+      ]);
+
+      if (showMessage) {
+        setToast(rows.length + ' audio/video files found on your device.');
+      }
+    } catch (error) {
+      console.error('Device media scan failed:', error);
+      if (showMessage) {
+        setToast(error?.message || 'Could not scan device media.');
+      }
+    } finally {
+      setBusy(false);
+    }
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadLibrary = async () => {
+      try {
+        const rows = await readAll();
+        if (active) {
+          setLibrary(rows.map(({ blob, ...meta }) => meta));
+        }
+      } catch {
+        if (active) {
+          setStorageError('Browser storage could not be opened. Try a current browser with site storage enabled.');
+        }
+      }
+
+      if (active && Capacitor.isNativePlatform()) {
+        await scanDeviceMedia(false);
+      }
+    };
+
+    loadLibrary();
+    return () => { active = false; };
+  }, [scanDeviceMedia]);
   useEffect(() => { localStorage.setItem('errortune-favorites', JSON.stringify([...favorites])); }, [favorites]);
   useEffect(() => {
     if (!toast) return;
@@ -140,10 +218,21 @@ function App() {
     if (!item) return;
     try {
       const stored = await dbRequest('readonly', store => store.get(item.id));
-      if (!stored?.blob) throw new Error('The saved media file is missing. Add it again.');
-      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
-      const url = URL.createObjectURL(stored.blob);
-      objectUrlRef.current = url;
+      let url;
+
+      if (stored?.sourceUri) {
+        const prepared = await NativeMediaLibrary.prepareMedia({
+          uri: stored.sourceUri,
+          name: stored.filename || item.filename || 'media-file'
+        });
+        url = Capacitor.convertFileSrc(prepared.path);
+      } else if (stored?.blob) {
+        if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+        url = URL.createObjectURL(stored.blob);
+        objectUrlRef.current = url;
+      } else {
+        throw new Error('The saved media file is missing. Scan or add it again.');
+      }
       const element = item.kind === 'video' ? videoRef.current : audioRef.current;
       const other = item.kind === 'video' ? audioRef.current : videoRef.current;
       other.pause(); other.removeAttribute('src'); other.load();
@@ -240,7 +329,7 @@ function App() {
     <nav className="tabs">{tabs.map(({name, icon: Icon, count}) => <button key={name} className={`tab ${activeTab === name ? 'selected' : ''}`} onClick={() => { setActiveTab(name); if (name !== 'Folders') setSelectedFolder(null); }}><Icon size={16}/><span>{name}</span><small>{count}</small></button>)}</nav>
 
     <main className="main-content">
-      <section className="section-heading"><div><div className="eyebrow">// MEDIA DIRECTORY</div><h1>{activeTab === 'Folders' ? 'Local File Vault' : activeTab}</h1><p>{activeTab === 'Folders' ? 'All imported media, including folder paths.' : activeTab === 'Favorites' ? 'Your saved tracks and videos.' : `Your ${activeTab.toLowerCase()} collection, stored on this device.`}</p></div><div className="heading-actions">{activeTab === 'Folders' && selectedFolder && <button className="outline-btn" onClick={() => setSelectedFolder(null)}><ChevronDown size={16}/> All folders</button>}<button className="outline-btn" onClick={() => folderRef.current?.click()}><Folder size={16}/> Import folder</button><button className="primary-btn" onClick={() => fileRef.current?.click()} disabled={busy}><Plus size={17}/>{busy ? 'Saving...' : 'Add media'}</button></div></section>
+      <section className="section-heading"><div><div className="eyebrow">// MEDIA DIRECTORY</div><h1>{activeTab === 'Folders' ? 'Local File Vault' : activeTab}</h1><p>{activeTab === 'Folders' ? 'All imported media, including folder paths.' : activeTab === 'Favorites' ? 'Your saved tracks and videos.' : `Your ${activeTab.toLowerCase()} collection, stored on this device.`}</p></div><div className="heading-actions">{Capacitor.isNativePlatform() && <button className="outline-btn" onClick={() => scanDeviceMedia(true)} disabled={busy}><HardDrive size={16}/>{busy ? 'Scanning...' : 'Scan device'}</button>}{activeTab === 'Folders' && selectedFolder && <button className="outline-btn" onClick={() => setSelectedFolder(null)}><ChevronDown size={16}/> All folders</button>}<button className="outline-btn" onClick={() => folderRef.current?.click()}><Folder size={16}/> Import folder</button><button className="primary-btn" onClick={() => fileRef.current?.click()} disabled={busy}><Plus size={17}/>{busy ? 'Saving...' : 'Add media'}</button></div></section>
       {storageError && <div className="notice"><HardDrive size={17}/>{storageError}</div>}
       <div className="library-meta"><span><span className="live-dot"/>{filtered.length} ITEMS</span><span>{sortMode === 'name' ? 'SORTED BY NAME' : 'NEWEST FIRST'}</span></div>
       {activeTab === 'Folders' && !selectedFolder && !query ? <div className="folder-grid">{folderGroups.map(([folder, count]) => <button className="folder-card" key={folder} onClick={() => setSelectedFolder(folder)}><Folder size={28}/><strong>{folder}</strong><span>{count} FILE{count === 1 ? '' : 'S'}</span></button>)}{folderGroups.length === 0 && <div className="empty-state"><div className="empty-icon"><Folder/></div><h2>No folders imported</h2><p>Use Import folder to choose a directory. Browser permissions control which folders can be selected.</p><button className="primary-btn" onClick={() => folderRef.current?.click()}><Folder size={16}/> Import folder</button></div>}</div> : filtered.length === 0 ? <div className="empty-state"><div className="empty-icon">{activeTab === 'Favorites' ? <Heart/> : activeTab === 'Videos' ? <Video/> : activeTab === 'Folders' ? <Folder/> : <ListMusic/>}</div><h2>{query ? 'No matching files' : activeTab === 'Favorites' ? 'No favorites yet' : `No ${activeTab.toLowerCase()} found`}</h2><p>{query ? 'Try a different search term.' : activeTab === 'Favorites' ? 'Tap the heart on any track to save it here.' : 'Import media files or a folder to build your local library.'}</p>{!query && activeTab !== 'Favorites' && <button className="primary-btn" onClick={() => fileRef.current?.click()}><Upload size={16}/> Choose media</button>}</div> : <div className={activeTab === 'Videos' ? 'media-grid' : 'track-list'}>
