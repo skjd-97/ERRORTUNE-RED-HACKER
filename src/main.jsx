@@ -306,6 +306,76 @@ function App() {
   };
   const seek = value => { const el = getMediaElement(); if (el && duration) { el.currentTime = Number(value); setCurrentTime(Number(value)); } };
 
+  // Android system media notification and lock-screen controls.
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    const session = navigator.mediaSession;
+
+    if (!current) {
+      session.metadata = null;
+      session.playbackState = 'none';
+      return;
+    }
+
+    if ('MediaMetadata' in window) {
+      session.metadata = new window.MediaMetadata({
+        title: current.name || 'Unknown media',
+        artist: 'ERRORTUNE RED HACKER',
+        album: current.kind === 'video' ? 'Videos' : 'Songs'
+      });
+    }
+    session.playbackState = playing ? 'playing' : 'paused';
+
+    const setHandler = (action, callback) => {
+      try { session.setActionHandler(action, callback); } catch {}
+    };
+
+    setHandler('play', async () => {
+      const element = current.kind === 'video' ? videoRef.current : audioRef.current;
+      if (element) {
+        try { await element.play(); setPlaying(true); }
+        catch { setToast('Playback could not resume. Open the app and press Play.'); }
+      }
+    });
+    setHandler('pause', () => {
+      (current.kind === 'video' ? videoRef.current : audioRef.current)?.pause();
+      setPlaying(false);
+    });
+    setHandler('stop', () => {
+      audioRef.current?.pause();
+      videoRef.current?.pause();
+      setPlaying(false);
+    });
+    setHandler('nexttrack', () => playNext());
+    setHandler('previoustrack', () => playPrevious());
+    setHandler('seekto', details => {
+      const element = current.kind === 'video' ? videoRef.current : audioRef.current;
+      if (element && Number.isFinite(details.seekTime)) {
+        element.currentTime = details.seekTime;
+        setCurrentTime(details.seekTime);
+      }
+    });
+
+    return () => {
+      ['play', 'pause', 'stop', 'nexttrack', 'previoustrack', 'seekto'].forEach(action => {
+        try { session.setActionHandler(action, null); } catch {}
+      });
+    };
+  }, [currentId, current?.name, current?.kind, playing, activeTab, shuffle, repeat]);
+
+  useEffect(() => {
+    const session = navigator.mediaSession;
+    if (!session?.setPositionState || !duration || !current) return;
+    try {
+      session.setPositionState({
+        duration,
+        playbackRate: 1,
+        position: Math.min(currentTime, duration)
+      });
+    } catch {}
+  }, [currentId, currentTime, duration, current]);
+
+
   const tabs = [
     { name: 'Songs', icon: Music, count: audioItems.length },
     { name: 'Videos', icon: Video, count: videoItems.length },
@@ -346,7 +416,7 @@ function App() {
     <input ref={folderRef} type="file" accept="audio/*,video/*" multiple webkitdirectory="" directory="" hidden onChange={e => { addFiles(e.target.files); e.target.value = ''; }}/>
 
     <audio ref={audioRef} preload="metadata" onTimeUpdate={e => setCurrentTime(e.currentTarget.currentTime)} onLoadedMetadata={e => setDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={onEnded}/>
-    <video ref={videoRef} className={`video-stage ${fullPlayer && current?.kind === 'video' ? 'video-stage-visible' : ''}`} playsInline preload="metadata" onTimeUpdate={e => setCurrentTime(e.currentTarget.currentTime)} onLoadedMetadata={e => setDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={onEnded}/>
+    <video ref={videoRef} className={`video-stage ${fullPlayer && current?.kind === 'video' ? 'video-stage-visible' : ''}`} controls={fullPlayer && current?.kind === "video"} playsInline={false} preload="metadata" onDoubleClick={e => { const v = e.currentTarget; if (v.requestFullscreen) v.requestFullscreen().catch(() => {}); }} onTimeUpdate={e => setCurrentTime(e.currentTarget.currentTime)} onLoadedMetadata={e => setDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={onEnded}/>
 
     {current && <div className="mini-player"><button className="mini-art" onClick={() => setFullPlayer(true)}>{current.kind === 'video' ? <Video/> : <Music/>}</button><button className="mini-info" onClick={() => setFullPlayer(true)}><strong>{current.name}</strong><span>{current.kind.toUpperCase()} · LOCAL FILE</span></button><button className={`favorite-btn mini-fav ${favorites.has(current.id) ? 'favorited' : ''}`} onClick={() => toggleFavorite(current.id)} aria-label="Toggle favorite"><Heart size={18} fill={favorites.has(current.id) ? 'currentColor' : 'none'}/></button><button className="player-control" onClick={togglePlayback} aria-label={playing ? 'Pause' : 'Play'}>{playing ? <Pause fill="currentColor"/> : <Play fill="currentColor"/>}</button><button className="player-control" onClick={playNext} aria-label="Next"><SkipForward fill="currentColor"/></button><div className="mini-progress" style={{'--progress': `${duration ? currentTime / duration * 100 : 0}%`}}/></div>}
 

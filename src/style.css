@@ -3,3 +3,29 @@
 @media(max-width:650px){.topbar{height:72px;padding:0 16px}.brand-name{font-size:19px}.brand-mark{width:38px;height:38px}.header-actions{gap:4px}.profile-trigger{padding:9px 10px}.profile-trigger span{display:none}.tabs{padding:17px 14px 0;gap:6px}.tab{padding:10px 11px;font-size:11px;gap:6px}.main-content{padding:32px 15px 55px}.section-heading{align-items:flex-start;flex-direction:column;margin-bottom:23px}.heading-actions{width:100%}.heading-actions button{flex:1}.track-row{gap:10px;padding:10px 3px}.cover{width:46px;height:46px;flex-basis:46px}.track-copy strong{font-size:12px}.track-copy span{font-size:8px}.more-btn{padding:5px}.mini-player{bottom:12px;height:68px;gap:8px;padding:8px}.mini-art{width:43px;height:43px;flex-basis:43px}.mini-fav{padding:5px}.player-control{width:33px;height:33px}.app-footer{height:38px;font-size:7px;padding:0 14px}.player-panel{padding:12px 18px 17px}.player-art{padding:20px 0}.album-art,.video-placeholder{width:min(245px,70vw)}.main-controls .big-play{width:56px;height:56px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
 .folder-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;padding-top:14px}.folder-card{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:20px;background:linear-gradient(145deg,rgba(35,10,16,.9),rgba(13,8,10,.9));border:1px solid #5c2028;border-radius:5px;color:#dc5962;text-align:left}.folder-card:hover{border-color:#e34b56;background:#2a0b12}.folder-card strong{max-width:100%;font-size:13px;color:#f1e4e6;overflow-wrap:anywhere}.folder-card span{font:9px 'DM Mono',monospace;letter-spacing:1px;color:#986c72}
+
+
+/* Full-screen video playback */
+.video-stage-visible {
+  display: block !important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 30 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  max-height: none !important;
+  left: 0 !important;
+  top: 0 !important;
+  transform: none !important;
+  object-fit: contain !important;
+  background: #000 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+body:has(.video-stage-visible) {
+  overflow: hidden;
+}
