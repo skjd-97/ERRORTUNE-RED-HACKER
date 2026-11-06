@@ -122,3 +122,12 @@ body:has(.video-stage-visible) {
   color: #fff;
   font-weight: 700;
 }
+.matrix {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 0 !important;
+  opacity: 0.88 !important;
+  pointer-events: none !important;
+}

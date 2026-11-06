@@ -49,37 +49,104 @@ const prettySize = bytes => bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(0)} 
 
 function MatrixBackground() {
   const canvasRef = useRef(null);
+
   useEffect(() => {
     const canvas = canvasRef.current;
+    if (!canvas) return;
+
     const ctx = canvas.getContext('2d');
-    let width = 0, height = 0, drops = [];
+    let width = 0;
+    let height = 0;
+    let animationFrame;
+    let lastFrame = 0;
+    const fontSize = 18;
+    let drops = [];
+
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      width = window.innerWidth; height = window.innerHeight;
-      canvas.width = width * dpr; canvas.height = height * dpr;
-      canvas.style.width = `${width}px`; canvas.style.height = `${height}px`;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drops = Array(Math.ceil(width / 19)).fill(1);
-    };
-    resize();
-    let frame;
-    const draw = () => {
-      ctx.fillStyle = 'rgba(5, 3, 4, .17)'; ctx.fillRect(0, 0, width, height);
-      ctx.font = '14px monospace';
-      drops.forEach((y, i) => {
-        ctx.fillStyle = Math.random() > .985 ? '#ff4545' : '#5e171d';
-        ctx.fillText(Math.random() > .5 ? '1' : '0', i * 19, y * 19);
-        if (y * 19 > height && Math.random() > .978) drops[i] = 0;
-        else drops[i]++;
-      });
-      frame = window.setTimeout(draw, 65);
-    };
-    draw(); window.addEventListener('resize', resize);
-    return () => { clearTimeout(frame); window.removeEventListener('resize', resize); };
-  }, []);
-  return <canvas ref={canvasRef} className="matrix" aria-hidden="true" />;
-}
 
+      width = window.innerWidth;
+      height = window.innerHeight;
+
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const columns = Math.ceil(width / fontSize);
+
+      drops = Array.from({ length: columns }, () => ({
+        y: Math.random() * height / fontSize,
+        speed: 0.35 + Math.random() * 1.1,
+        length: 8 + Math.floor(Math.random() * 15)
+      }));
+    };
+
+    resize();
+
+    const draw = (time) => {
+      animationFrame = requestAnimationFrame(draw);
+
+      if (time - lastFrame < 40) return;
+      lastFrame = time;
+
+      ctx.fillStyle = 'rgba(3, 1, 2, 0.12)';
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.font = 'bold 16px monospace';
+      ctx.textAlign = 'center';
+
+      drops.forEach((drop, i) => {
+        const x = i * fontSize + fontSize / 2;
+
+        for (let j = 0; j < drop.length; j++) {
+          const y = (drop.y - j) * fontSize;
+
+          if (y < 0 || y > height) continue;
+
+          if (j === 0) {
+            ctx.fillStyle = '#ff6870';
+            ctx.shadowColor = '#ff172b';
+            ctx.shadowBlur = 15;
+          } else if (j < 4) {
+            ctx.fillStyle = '#ff303d';
+            ctx.shadowBlur = 7;
+          } else {
+            ctx.fillStyle = `rgba(220, 20, 35, ${Math.max(0.12, 0.75 - j / drop.length)})`;
+            ctx.shadowBlur = 2;
+          }
+
+          ctx.fillText(Math.random() > 0.5 ? '1' : '0', x, y);
+        }
+
+        ctx.shadowBlur = 0;
+        drop.y += drop.speed;
+
+        if (drop.y * fontSize > height + drop.length * fontSize) {
+          drop.y = -Math.random() * 30;
+          drop.speed = 0.35 + Math.random() * 1.1;
+          drop.length = 8 + Math.floor(Math.random() * 15);
+        }
+      });
+    };
+
+    animationFrame = requestAnimationFrame(draw);
+    window.addEventListener('resize', resize);
+
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      window.removeEventListener('resize', resize);
+    };
+  }, []);
+
+  return <canvas
+    ref={canvasRef}
+    className="matrix"
+    aria-hidden="true"
+  />;
+}
 function App() {
   const [library, setLibrary] = useState([]);
   const [favorites, setFavorites] = useState(() => new Set(JSON.parse(localStorage.getItem('errortune-favorites') || '[]')));
