@@ -305,6 +305,12 @@ function App() {
     else await playNext();
   };
   const seek = value => { const el = getMediaElement(); if (el && duration) { el.currentTime = Number(value); setCurrentTime(Number(value)); } };
+  const seekVideoBy = seconds => {
+    const video = videoRef.current;
+    if (!video || !Number.isFinite(video.duration)) return;
+    video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + seconds));
+    setCurrentTime(video.currentTime);
+  };
 
   // Android system media notification and lock-screen controls.
   useEffect(() => {
@@ -416,7 +422,20 @@ function App() {
     <input ref={folderRef} type="file" accept="audio/*,video/*" multiple webkitdirectory="" directory="" hidden onChange={e => { addFiles(e.target.files); e.target.value = ''; }}/>
 
     <audio ref={audioRef} preload="metadata" onTimeUpdate={e => setCurrentTime(e.currentTarget.currentTime)} onLoadedMetadata={e => setDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={onEnded}/>
-    <video ref={videoRef} className={`video-stage ${fullPlayer && current?.kind === 'video' ? 'video-stage-visible' : ''}`} controls={fullPlayer && current?.kind === "video"} playsInline={false} preload="metadata" onDoubleClick={e => { const v = e.currentTarget; if (v.requestFullscreen) v.requestFullscreen().catch(() => {}); }} onTimeUpdate={e => setCurrentTime(e.currentTarget.currentTime)} onLoadedMetadata={e => setDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={onEnded}/>
+    <video ref={videoRef} className={`video-stage ${fullPlayer && current?.kind === 'video' ? 'video-stage-visible' : ''}`} controls={false} playsInline preload="metadata" onTimeUpdate={e => setCurrentTime(e.currentTarget.currentTime)} onLoadedMetadata={e => setDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={onEnded}/>
+
+    {current?.kind === 'video' && fullPlayer && <div className="video-controls">
+      <button className="video-exit" onClick={() => setFullPlayer(false)}>✕ EXIT VIDEO</button>
+      <div className="video-control-bottom">
+        <div className="video-time"><span>{fmt(currentTime)}</span><span>{fmt(duration)}</span></div>
+        <input aria-label="Video progress" type="range" min="0" max={duration || 1} step="0.1" value={Math.min(currentTime, duration || 1)} onChange={e => seek(e.target.value)}/>
+        <div className="video-buttons">
+          <button onClick={() => seekVideoBy(-10)}>−10s</button>
+          <button className="video-play" onClick={togglePlayback}>{playing ? '❚❚ PAUSE' : '▶ PLAY'}</button>
+          <button onClick={() => seekVideoBy(10)}>+10s</button>
+        </div>
+      </div>
+    </div>}
 
     {current && <div className="mini-player"><button className="mini-art" onClick={() => setFullPlayer(true)}>{current.kind === 'video' ? <Video/> : <Music/>}</button><button className="mini-info" onClick={() => setFullPlayer(true)}><strong>{current.name}</strong><span>{current.kind.toUpperCase()} · LOCAL FILE</span></button><button className={`favorite-btn mini-fav ${favorites.has(current.id) ? 'favorited' : ''}`} onClick={() => toggleFavorite(current.id)} aria-label="Toggle favorite"><Heart size={18} fill={favorites.has(current.id) ? 'currentColor' : 'none'}/></button><button className="player-control" onClick={togglePlayback} aria-label={playing ? 'Pause' : 'Play'}>{playing ? <Pause fill="currentColor"/> : <Play fill="currentColor"/>}</button><button className="player-control" onClick={playNext} aria-label="Next"><SkipForward fill="currentColor"/></button><div className="mini-progress" style={{'--progress': `${duration ? currentTime / duration * 100 : 0}%`}}/></div>}
 
